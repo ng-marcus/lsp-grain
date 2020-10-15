@@ -1,6 +1,6 @@
-# LSP Example
+# LSP for Grain
 
-Heavily documented sample code for https://code.visualstudio.com/api/language-extensions/language-server-extension-guide
+Simple LSP server for https://github.com/grain-lang
 
 ## Functionality
 
@@ -24,7 +24,7 @@ It also includes an End-to-End test.
         └── server.ts // Language Server entry point
 ```
 
-## Running the Sample
+## Running the extension
 
 - Run `npm install` in this folder. This installs all necessary npm modules in both the client and server folder
 - Open VS Code on this folder.
@@ -33,6 +33,5 @@ It also includes an End-to-End test.
 - Select `Launch Client` from the drop down.
 - Run the launch config.
 - If you want to debug the server as well use the launch configuration `Attach to Server`
-- In the [Extension Development Host] instance of VSCode, open a document in 'plain text' language mode.
-  - Type `j` or `t` to see `Javascript` and `TypeScript` completion.
-  - Enter text content such as `AAA aaa BBB`. The extension will emit diagnostics for all words in all-uppercase.
+- In the [Extension Development Host] instance of VSCode, open a document in 'grain' language mode.
+ 
