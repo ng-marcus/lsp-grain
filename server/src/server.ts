@@ -150,50 +150,45 @@ async function validateWithCompiler(textDocument: TextDocument): Promise<void> {
 	let filename = basename(name);
 	let diagnostics: Diagnostic[] = [];
 
-
 	let cliPath = globalSettings.cliPath;
 
 	try {
 
-		let result = childProcess.execFileSync(cliPath, ["lsp", filename], { input: text })
+		let result_json_buffer = childProcess.execFileSync(cliPath, ["lsp", filename], { input: text });
 
-		let resultString = result.toString();
-		if (resultString.length > 2) {
-			// display the error
-
-			let lines = resultString.split("\n");
-			if (lines.length > 1) {
-				let ranges = lines[0];
-
-				let positions = ranges.split(" ");
-				let error = lines.slice(1).join("\n");
-
-				let spos = Position.create(parseInt(positions[0]) - 1, parseInt(positions[1]));
-				let epos = Position.create(parseInt(positions[2]) - 1, parseInt(positions[3]));
-
-
-				let diagnostic: Diagnostic = {
-					severity: DiagnosticSeverity.Error,
-					range: {
-						start: spos,
-						end: epos,
-					},
-					message: "Error: " + error,
-					source: 'grainc'
-				};
-
-				diagnostics.push(diagnostic);
-
-			}
-
-
+		interface LSP_Error {
+			file: string;
+			line: number;
+			startchar: number,
+			endline: number,
+			endchar: number,
+			lsp_message: string
 		}
+
+		let error: LSP_Error = JSON.parse(result_json_buffer.toString());
+
+		let spos = Position.create(error.line - 1, error.startchar);
+		let epos = Position.create(error.endline - 1, error.endchar);
+
+
+		let diagnostic: Diagnostic = {
+			severity: DiagnosticSeverity.Error,
+			range: {
+				start: spos,
+				end: epos,
+			},
+			message: "Error: " + error.lsp_message,
+			source: 'grainc'
+		};
+
+		diagnostics.push(diagnostic);
+
 	}
+
+
 	catch (e) {
 		connection.console.log(e)
 	}
-
-
 
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
