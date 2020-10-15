@@ -24,9 +24,7 @@ import {
 } from 'vscode-languageserver-textdocument';
 
 import * as childProcess from 'child_process';
-
-
-
+import { basename } from 'path';
 
 
 // Create a connection for the server, using Node's IPC as a transport.
@@ -61,9 +59,9 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
 			// Tell the client that this server supports code completion.
-			completionProvider: {
-				resolveProvider: true
-			}
+			// completionProvider: {
+			// 	resolveProvider: true
+			// }
 		}
 	};
 	if (hasWorkspaceFolderCapability) {
@@ -88,15 +86,16 @@ connection.onInitialized(() => {
 	}
 });
 
-// The example settings
+// The grain cli settings
 interface GrainSettings {
 	maxNumberOfProblems: number;
+	cliPath: string;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings: GrainSettings = { maxNumberOfProblems: 1000 };
+const defaultSettings: GrainSettings = { maxNumberOfProblems: 1000, cliPath: "grain" };
 let globalSettings: GrainSettings = defaultSettings;
 
 // Cache the settings of all open documents
@@ -113,7 +112,7 @@ connection.onDidChangeConfiguration(change => {
 	}
 
 	// Revalidate all open text documents
-	documents.all().forEach(validateTextDocument);
+	documents.all().forEach(validateWithCompiler);
 });
 
 function getDocumentSettings(resource: string): Thenable<GrainSettings> {
@@ -143,16 +142,20 @@ documents.onDidChangeContent(change => {
 });
 
 
+// simple approach, pass the whole text buffer as stdin to the compiler
 async function validateWithCompiler(textDocument: TextDocument): Promise<void> {
 
 	let text = textDocument.getText();
-
-	let problems = 0;
+	let name = textDocument.uri;
+	let filename = basename(name);
 	let diagnostics: Diagnostic[] = [];
+
+
+	let cliPath = globalSettings.cliPath;
 
 	try {
 
-		let result = childProcess.execFileSync("/usr/local/bin/grain", ["lsp", "hello.gr"], { input: text })
+		let result = childProcess.execFileSync(cliPath, ["lsp", filename], { input: text })
 
 		let resultString = result.toString();
 		if (resultString.length > 2) {
@@ -163,14 +166,7 @@ async function validateWithCompiler(textDocument: TextDocument): Promise<void> {
 				let ranges = lines[0];
 
 				let positions = ranges.split(" ");
-
-
-
 				let error = lines.slice(1).join("\n");
-
-
-				// let spos = Position.create(7 - 1, 12);
-				// let epos = Position.create(7 - 1, 19);
 
 				let spos = Position.create(parseInt(positions[0]) - 1, parseInt(positions[1]));
 				let epos = Position.create(parseInt(positions[2]) - 1, parseInt(positions[3]));
@@ -188,125 +184,20 @@ async function validateWithCompiler(textDocument: TextDocument): Promise<void> {
 
 				diagnostics.push(diagnostic);
 
-
-
 			}
 
 
 		}
-
-
-
-		//	console.log(result.toString());
 	}
 	catch (e) {
-		console.log(e)
+		connection.console.log(e)
 	}
+
 
 
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 };
-
-async function validateGrainDocument(textDocument: TextDocument): Promise<void> {
-
-	let settings = await getDocumentSettings(textDocument.uri);
-
-	// The validator creates diagnostics for all uppercase words length 2 and more
-	let text = textDocument.getText();
-	let pattern = /\b[A-Z]{2,}\b/g;
-	let m: RegExpExecArray | null;
-
-	let problems = 0;
-	let diagnostics: Diagnostic[] = [];
-
-	problems++;
-
-	let spos = Position.create(7 - 1, 12);
-	let epos = Position.create(7 - 1, 19);
-
-
-	let diagnostic: Diagnostic = {
-		severity: DiagnosticSeverity.Error,
-		range: {
-			start: spos,
-			end: epos,
-		},
-		message: "Error: This expression has type String but an expression was expected of type\nNumber",
-		source: 'grainc'
-	};
-	// if (hasDiagnosticRelatedInformationCapability) {
-	// 	diagnostic.relatedInformation = [
-	// 		{
-	// 			location: {
-	// 				uri: textDocument.uri,
-	// 				range: Object.assign({}, diagnostic.range)
-	// 			},
-	// 			message: 'Spelling matters'
-	// 		},
-	// 		{
-	// 			location: {
-	// 				uri: textDocument.uri,
-	// 				range: Object.assign({}, diagnostic.range)
-	// 			},
-	// 			message: 'Particularly for names'
-	// 		}
-	// 	];
-
-	diagnostics.push(diagnostic);
-
-
-	// Send the computed diagnostics to VSCode.
-	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
-
-}
-
-async function validateTextDocument(textDocument: TextDocument): Promise<void> {
-	// In this simple example we get the settings for every validate run.
-	let settings = await getDocumentSettings(textDocument.uri);
-
-	// The validator creates diagnostics for all uppercase words length 2 and more
-	let text = textDocument.getText();
-	let pattern = /\b[A-Z]{2,}\b/g;
-	let m: RegExpExecArray | null;
-
-	let problems = 0;
-	let diagnostics: Diagnostic[] = [];
-	while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-		problems++;
-		let diagnostic: Diagnostic = {
-			severity: DiagnosticSeverity.Warning,
-			range: {
-				start: textDocument.positionAt(m.index),
-				end: textDocument.positionAt(m.index + m[0].length)
-			},
-			message: `${m[0]} is all uppercase.`,
-			source: 'ex'
-		};
-		if (hasDiagnosticRelatedInformationCapability) {
-			diagnostic.relatedInformation = [
-				{
-					location: {
-						uri: textDocument.uri,
-						range: Object.assign({}, diagnostic.range)
-					},
-					message: 'Spelling matters'
-				},
-				{
-					location: {
-						uri: textDocument.uri,
-						range: Object.assign({}, diagnostic.range)
-					},
-					message: 'Particularly for names'
-				}
-			];
-		}
-		diagnostics.push(diagnostic);
-	}
-
-	// Send the computed diagnostics to VSCode.
-	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
-}
 
 connection.onDidChangeWatchedFiles(_change => {
 	// Monitored files have change in VSCode
@@ -320,34 +211,34 @@ connection.onCompletion(
 		// which code complete got requested. For the example we ignore this
 		// info and always provide the same completion items.
 		return [
-			{
-				label: 'TypeScript',
-				kind: CompletionItemKind.Text,
-				data: 1
-			},
-			{
-				label: 'JavaScript',
-				kind: CompletionItemKind.Text,
-				data: 2
-			}
+			// {
+			// 	label: 'TypeScript',
+			// 	kind: CompletionItemKind.Text,
+			// 	data: 1
+			// },
+			// {
+			// 	label: 'JavaScript',
+			// 	kind: CompletionItemKind.Text,
+			// 	data: 2
+			// }
 		];
 	}
 );
 
 // This handler resolves additional information for the item selected in
 // the completion list.
-connection.onCompletionResolve(
-	(item: CompletionItem): CompletionItem => {
-		if (item.data === 1) {
-			item.detail = 'TypeScript details';
-			item.documentation = 'TypeScript documentation';
-		} else if (item.data === 2) {
-			item.detail = 'JavaScript details';
-			item.documentation = 'JavaScript documentation';
-		}
-		return item;
-	}
-);
+// connection.onCompletionResolve(
+// 	(item: CompletionItem): CompletionItem => {
+// 		if (item.data === 1) {
+// 			item.detail = 'TypeScript details';
+// 			item.documentation = 'TypeScript documentation';
+// 		} else if (item.data === 2) {
+// 			item.detail = 'JavaScript details';
+// 			item.documentation = 'JavaScript documentation';
+// 		}
+// 		return item;
+// 	}
+// );
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events

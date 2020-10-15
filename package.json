@@ -41,6 +41,12 @@
 					],
 					"default": "off",
 					"description": "Traces the communication between VS Code and the language server."
+				},
+				"grain_language_server.cliPath": {
+					"scope": "resource",
+					"type": "string",
+					"default": "grain",
+					"description": "Path to the grain cli"
 				}
 			}
 		}
